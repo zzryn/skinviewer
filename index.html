@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Skin Viewer</title>
+    <!-- Material Symbols -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-hue: 220deg;
+            --bg-brightness: 0.4;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Roboto', sans-serif;
+            background-color: #000;
+        }
+
+        /* Dynamic Background */
+        #background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, 
+                hsl(var(--bg-hue), 60%, calc(20% * var(--bg-brightness))), 
+                hsl(var(--bg-hue), 80%, calc(10% * var(--bg-brightness)))
+            );
+            filter: blur(20px);
+            z-index: 0;
+        }
+
+        /* Canvas */
+        #skin_container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: grab;
+        }
+        #skin_container:active {
+            cursor: grabbing;
+        }
+
+        /* UI overlay */
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: flex;
+            gap: 12px;
+            pointer-events: none; /* Let clicks pass through gaps */
+        }
+
+        .icon-btn {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .material-symbols-outlined {
+            font-size: 24px;
+        }
+
+        /* Floating Tooltip */
+        #cursor-tooltip {
+            position: fixed;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 1000;
+            transform: translate(15px, 15px);
+        }
+
+        /* Context Menu */
+        #context-menu {
+            position: fixed;
+            background: rgba(30, 30, 30, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 8px 0;
+            display: none;
+            flex-direction: column;
+            z-index: 100;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            min-width: 160px;
+        }
+
+        .menu-item {
+            padding: 8px 16px;
+            color: #eee;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .menu-header {
+            padding: 4px 16px 8px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #aaa;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 4px;
+        }
+
+        /* Modals */
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1e1e1e;
+            color: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            z-index: 200;
+            display: none;
+            width: 300px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .modal h2 {
+            margin: 0 0 16px 0;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 150;
+            display: none;
+        }
+
+        .slider-container {
+            margin-bottom: 16px;
+        }
+        .slider-container label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        input[type="range"] {
+            width: 100%;
+            accent-color: #5a76f3;
+        }
+        
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+        .toggle-row span {
+            font-size: 14px;
+        }
+
+        /* Drop Zone indicator */
+        #drop-zone {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(90, 118, 243, 0.2);
+            border: 4px dashed #5a76f3;
+            box-sizing: border-box;
+            z-index: 50;
+            display: none;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="background"></div>
+    <div id="drop-zone">Drop Skin File Here</div>
+    <canvas id="skin_container"></canvas>
+
+    <!-- Top UI Buttons -->
+    <div id="ui-layer">
+        <!-- Upload -->
+        <div class="icon-btn" id="btn-upload" data-tooltip="Upload skin">
+            <span class="material-symbols-outlined">frame_person</span>
+            <input type="file" id="skin-input" accept="image/*" style="display: none;">
+        </div>
+
+        <!-- Visibility Options -->
+        <div class="icon-btn" id="btn-visibility" data-tooltip="Visibility options">
+            <span class="material-symbols-outlined">visibility</span>
+        </div>
+
+        <!-- Model Type Toggle (Standard/Slim) -->
+        <div class="icon-btn" id="btn-model-toggle" data-tooltip="Standard">
+            <span class="material-symbols-outlined" id="model-icon">boy</span>
+        </div>
+
+        <!-- Background Override -->
+        <div class="icon-btn" id="btn-bg" data-tooltip="Override background">
+            <span class="material-symbols-outlined">gradient</span>
+        </div>
+    </div>
+
+    <!-- Custom Cursor Tooltip -->
+    <div id="cursor-tooltip"></div>
+
+    <!-- Right Click Context Menu -->
+    <div id="context-menu">
+        <div class="menu-header" id="ctx-header">Part Name</div>
+        <div class="menu-item" id="ctx-toggle-base">
+            <span class="material-symbols-outlined" style="font-size: 16px">check_box</span> Toggle Base
+        </div>
+        <div class="menu-item" id="ctx-toggle-overlay">
+            <span class="material-symbols-outlined" style="font-size: 16px">check_box</span> Toggle Overlay
+        </div>
+        <div class="menu-item" id="ctx-toggle-both">
+            <span class="material-symbols-outlined" style="font-size: 16px">layers</span> Toggle Both
+        </div>
+    </div>
+
+    <!-- Modal Backdrop -->
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+
+    <!-- Background Settings Modal -->
+    <div class="modal" id="modal-bg">
+        <h2>Background Settings</h2>
+        <div class="slider-container">
+            <label>Hue</label>
+            <input type="range" id="bg-hue" min="0" max="360" value="220">
+        </div>
+        <div class="slider-container">
+            <label>Brightness</label>
+            <input type="range" id="bg-brightness" min="0.1" max="1" step="0.1" value="0.4">
+        </div>
+    </div>
+
+    <!-- Global Visibility Modal -->
+    <div class="modal" id="modal-visibility">
+        <h2>Visibility Options</h2>
+        <div id="vis-toggles">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/skinview3d@3.0.0-alpha.1/bundles/skinview3d.bundle.js"></script>
+
+    <script>
+        const skinViewer = new skinview3d.SkinViewer({
+            canvas: document.getElementById("skin_container"),
+            width: window.innerWidth,
+            height: window.innerHeight,
+            skin: "https://textures.minecraft.net/texture/b3fbd8d74263672bf62c640e704024345228892f337f7173b2241680183145d8" // Default Steve
+        });
+
+        // Enable smoothed rotation
+        skinViewer.controls.enableDamping = true;
+        skinViewer.controls.dampingFactor = 0.05;
+        skinViewer.controls.rotateSpeed = 0.8;
+        skinViewer.controls.enableZoom = true;
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            skinViewer.width = window.innerWidth;
+            skinViewer.height = window.innerHeight;
+        });
+
+        // --- State ---
+        let currentModel = 'default'; // 'default' or 'slim'
+        let currentPart = null; // The part currently hovered
+        let skinURL = skinViewer.skinUrl;
+
+        // --- Part Identification Logic ---
+        // Maps internal mesh names to logical groups
+        function getPartName(mesh) {
+            if (!mesh || !mesh.parent) return null;
+            // Traverse up to find the group attached to player
+            let obj = mesh;
+            while(obj.parent && obj.parent !== skinViewer.playerObject) {
+                obj = obj.parent;
+            }
+            // skinview3d 3.0 structure typically:
+            // playerObject.children -> groups like 'head', 'body', 'leftArm', etc.
+            // Inner mesh name is usually 'head' or just 'inner' inside the group
+            // Outer mesh name is usually 'headLayer' or 'outer'
+            
+            // Map the Group or Mesh name to our logical parts
+            const name = obj.name || mesh.name;
+            
+            if (name.includes('head')) return 'head';
+            if (name.includes('body') || name.includes('torso')) return 'body';
+            if (name.includes('leftArm')) return 'leftArm';
+            if (name.includes('rightArm')) return 'rightArm';
+            if (name.includes('leftLeg')) return 'leftLeg';
+            if (name.includes('rightLeg')) return 'rightLeg';
+            return null;
+        }
+
+        function getFriendlyName(part) {
+            const map = {
+                'head': 'Head', 'body': 'Body',
+                'leftArm': 'Left Arm', 'rightArm': 'Right Arm',
+                'leftLeg': 'Left Leg', 'rightLeg': 'Right Leg'
+            };
+            return map[part] || part;
+        }
+
+        // --- Raycasting for Highlight & Context Menu ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        // Highlight Effect
+        let highlightedMeshes = [];
+        const originalEmissives = new Map();
+
+        function clearHighlight() {
+            highlightedMeshes.forEach(mesh => {
+                if(originalEmissives.has(mesh.uuid)) {
+                    mesh.material.emissive.setHex(originalEmissives.get(mesh.uuid));
+                }
+            });
+            highlightedMeshes = [];
+            originalEmissives.clear();
+            document.getElementById('skin_container').style.cursor = 'grab';
+        }
+
+        function highlightPart(partName) {
+            clearHighlight();
+            if (!partName) return;
+
+            document.getElementById('skin_container').style.cursor = 'pointer';
+
+            // Find all meshes belonging to this part (inner & outer)
+            skinViewer.playerObject.traverse(child => {
+                if (child.isMesh) {
+                    const p = getPartName(child);
+                    if (p === partName) {
+                        // Store original emissive
+                        if(!originalEmissives.has(child.uuid)) {
+                            originalEmissives.set(child.uuid, child.material.emissive.getHex());
+                        }
+                        // Apply highlight (slight white glow)
+                        child.material.emissive.setHex(0x444444);
+                        highlightedMeshes.push(child);
+                    }
+                }
+            });
+        }
+
+        // Mouse Move Listener
+        const canvas = document.getElementById("skin_container");
+        canvas.addEventListener('mousemove', (event) => {
+            // Update mouse pos for raycaster
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, skinViewer.camera);
+            
+            // Intersect with player model
+            const intersects = raycaster.intersectObject(skinViewer.playerObject, true);
+            
+            if (intersects.length > 0) {
+                // Get the first visible mesh hit
+                const hit = intersects.find(i => i.object.visible);
+                if(hit) {
+                    const part = getPartName(hit.object);
+                    if (part !== currentPart) {
+                        currentPart = part;
+                        highlightPart(part);
+                    }
+                    return; // Stop if we found a part
+                }
+            }
+            
+            // If no hit
+            if (currentPart !== null) {
+                currentPart = null;
+                clearHighlight();
+            }
+        });
+
+        // --- Context Menu ---
+        const contextMenu = document.getElementById('context-menu');
+        const modalBackdrop = document.getElementById('modal-backdrop');
+
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (currentPart) {
+                const friendly = getFriendlyName(currentPart);
+                document.getElementById('ctx-header').innerText = friendly;
+                
+                // Position menu
+                contextMenu.style.display = 'flex';
+                contextMenu.style.left = e.clientX + 'px';
+                contextMenu.style.top = e.clientY + 'px';
+                
+                // Adjust if out of bounds
+                const rect = contextMenu.getBoundingClientRect();
+                if(rect.right > window.innerWidth) contextMenu.style.left = (window.innerWidth - rect.width - 10) + 'px';
+                if(rect.bottom > window.innerHeight) contextMenu.style.top = (window.innerHeight - rect.height - 10) + 'px';
+
+                // Setup Actions
+                contextMenu.dataset.targetPart = currentPart;
+            }
+        });
+
+        // Close context menu on click elsewhere
+        window.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
+        });
+
+        function toggleLayer(part, layerType) {
+            // layerType: 'inner', 'outer', 'both'
+            const skinObj = skinViewer.playerObject.skin;
+            
+            // skinview3d object keys for parts:
+            // Inner: head, body, leftArm, rightArm, leftLeg, rightLeg
+            // Outer: headLayer, bodyLayer, leftArmLayer, rightArmLayer, leftLegLayer, rightLegLayer
+            
+            const innerKey = part;
+            const outerKey = part + "Layer";
+
+            if (layerType === 'inner' || layerType === 'both') {
+                if(skinObj[innerKey]) skinObj[innerKey].visible = !skinObj[innerKey].visible;
+            }
+            if (layerType === 'outer' || layerType === 'both') {
+                if(skinObj[outerKey]) skinObj[outerKey].visible = !skinObj[outerKey].visible;
+            }
+        }
+
+        document.getElementById('ctx-toggle-base').onclick = () => toggleLayer(contextMenu.dataset.targetPart, 'inner');
+        document.getElementById('ctx-toggle-overlay').onclick = () => toggleLayer(contextMenu.dataset.targetPart, 'outer');
+        document.getElementById('ctx-toggle-both').onclick = () => toggleLayer(contextMenu.dataset.targetPart, 'both');
+
+
+        // --- UI Buttons & Tooltips ---
+        
+        // Tooltip logic
+        const tooltip = document.getElementById('cursor-tooltip');
+        const buttons = document.querySelectorAll('.icon-btn');
+
+        buttons.forEach(btn => {
+            btn.addEventListener('mousemove', (e) => {
+                tooltip.style.opacity = '1';
+                tooltip.innerText = btn.getAttribute('data-tooltip');
+                tooltip.style.left = (e.clientX + 10) + 'px';
+                tooltip.style.top = (e.clientY + 10) + 'px';
+            });
+            btn.addEventListener('mouseleave', () => {
+                tooltip.style.opacity = '0';
+            });
+        });
+
+        // Upload
+        const uploadBtn = document.getElementById('btn-upload');
+        const fileInput = document.getElementById('skin-input');
+        uploadBtn.onclick = () => fileInput.click();
+        
+        fileInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) loadSkinFile(file);
+        };
+
+        function loadSkinFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                skinURL = e.target.result;
+                skinViewer.loadSkin(skinURL, { model: currentModel });
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Toggle Model (Slim/Standard)
+        const modelBtn = document.getElementById('btn-model-toggle');
+        const modelIcon = document.getElementById('model-icon');
+        
+        modelBtn.onclick = () => {
+            if (currentModel === 'default') {
+                currentModel = 'slim';
+                modelBtn.setAttribute('data-tooltip', 'Slim');
+                modelIcon.innerText = 'girl';
+            } else {
+                currentModel = 'default';
+                modelBtn.setAttribute('data-tooltip', 'Standard');
+                modelIcon.innerText = 'boy';
+            }
+            // Reload skin with new model
+            skinViewer.loadSkin(skinURL, { model: currentModel });
+            // Update tooltip immediately
+            tooltip.innerText = modelBtn.getAttribute('data-tooltip');
+        };
+
+        // Background Settings
+        const bgBtn = document.getElementById('btn-bg');
+        const bgModal = document.getElementById('modal-bg');
+        
+        bgBtn.onclick = () => {
+            bgModal.style.display = 'block';
+            modalBackdrop.style.display = 'block';
+        };
+
+        // CSS Variable Updates for Background
+        const root = document.documentElement;
+        document.getElementById('bg-hue').addEventListener('input', (e) => {
+            root.style.setProperty('--bg-hue', e.target.value + 'deg');
+        });
+        document.getElementById('bg-brightness').addEventListener('input', (e) => {
+            root.style.setProperty('--bg-brightness', e.target.value);
+        });
+
+        // Visibility Modal
+        const visBtn = document.getElementById('btn-visibility');
+        const visModal = document.getElementById('modal-visibility');
+        const visContainer = document.getElementById('vis-toggles');
+
+        visBtn.onclick = () => {
+            // Re-generate toggles every time to sync state
+            visContainer.innerHTML = '';
+            const parts = ['head', 'body', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
+            
+            parts.forEach(part => {
+                const friendly = getFriendlyName(part);
+                const row = document.createElement('div');
+                row.className = 'toggle-row';
+                
+                // We check if either layer is visible to check the box (simplification)
+                // Ideally we have 2 checks, but let's do a master toggle for the part
+                const isVisible = skinViewer.playerObject.skin[part].visible;
+
+                row.innerHTML = `
+                    <span>${friendly}</span>
+                    <input type="checkbox" ${isVisible ? 'checked' : ''}>
+                `;
+                
+                const cb = row.querySelector('input');
+                cb.onchange = () => {
+                   // Toggle both layers for simplicity in this global menu
+                   skinViewer.playerObject.skin[part].visible = cb.checked;
+                   skinViewer.playerObject.skin[part + "Layer"].visible = cb.checked;
+                };
+                
+                visContainer.appendChild(row);
+            });
+
+            visModal.style.display = 'block';
+            modalBackdrop.style.display = 'block';
+        };
+
+        // Close Modals
+        modalBackdrop.onclick = () => {
+            bgModal.style.display = 'none';
+            visModal.style.display = 'none';
+            modalBackdrop.style.display = 'none';
+        };
+
+        // --- Drag & Drop / Paste ---
+        const dropZone = document.getElementById('drop-zone');
+
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.opacity = '1';
+            dropZone.style.display = 'flex';
+        });
+
+        window.addEventListener('dragleave', (e) => {
+            if(e.target === dropZone) {
+                dropZone.style.opacity = '0';
+                setTimeout(() => dropZone.style.display = 'none', 300);
+            }
+        });
+
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.opacity = '0';
+            dropZone.style.display = 'none';
+            
+            if (e.dataTransfer.files.length > 0) {
+                loadSkinFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        window.addEventListener('paste', (e) => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (const item of items) {
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    loadSkinFile(item.getAsFile());
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
