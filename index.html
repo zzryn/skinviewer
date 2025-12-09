@@ -317,7 +317,6 @@
         <h2>Background Settings</h2>
         <div class="slider-container">
             <label>Hue</label>
-            <!-- Added data-tooltip attribute for uniformity -->
             <input type="range" id="bg-hue" min="0" max="360" value="220" step="any" data-tooltip-template="{}°">
         </div>
         <div class="slider-container">
@@ -337,12 +336,17 @@
     <script src="https://cdn.jsdelivr.net/npm/skinview3d@3.0.0-alpha.1/bundles/skinview3d.bundle.js"></script>
 
     <script>
-        // --- 1. Initialization ---
+        // --- 1. Initialization & State ---
+        // State variables to track the current skin and model
+        let currentModel = 'default';
+        let skinURL = "https://textures.minecraft.net/texture/b3fbd8d74263672bf62c640e704024345228892f337f7173b2241680183145d8";
+
         const skinViewer = new skinview3d.SkinViewer({
             canvas: document.getElementById("skin_container"),
             width: window.innerWidth,
             height: window.innerHeight,
-            skin: "https://textures.minecraft.net/texture/b3fbd8d74263672bf62c640e704024345228892f337f7173b2241680183145d8"
+            skin: skinURL,
+            model: currentModel
         });
 
         // Config
@@ -351,7 +355,46 @@
         skinViewer.controls.enableDamping = true;
         skinViewer.controls.dampingFactor = 0.05;
 
-        // --- 2. Camera Switching ---
+        // --- 2. File Loading & Model Toggling ---
+        
+        // Helper to load skin and maintain state
+        function loadSkin(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                skinURL = e.target.result; // Update global state
+                skinViewer.loadSkin(skinURL, { model: currentModel });
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Upload Button Logic
+        document.getElementById('btn-upload').onclick = () => document.getElementById('skin-input').click();
+        document.getElementById('skin-input').onchange = (e) => { if(e.target.files[0]) loadSkin(e.target.files[0]); };
+
+        // Toggle Model Button Logic (Restored)
+        const modelBtn = document.getElementById('btn-model-toggle');
+        const modelIcon = document.getElementById('model-icon');
+        
+        modelBtn.onclick = () => {
+            if (currentModel === 'default') {
+                currentModel = 'slim';
+                modelBtn.setAttribute('data-tooltip', 'Slim');
+                modelIcon.innerText = 'girl';
+            } else {
+                currentModel = 'default';
+                modelBtn.setAttribute('data-tooltip', 'Standard');
+                modelIcon.innerText = 'boy';
+            }
+            // Reload using the stored URL and new model
+            skinViewer.loadSkin(skinURL, { model: currentModel });
+            
+            // Update tooltip immediately
+            const tooltip = document.getElementById('cursor-tooltip');
+            if(tooltip.style.opacity === '1') tooltip.innerText = modelBtn.getAttribute('data-tooltip');
+        };
+
+
+        // --- 3. Camera Switching ---
         const btnCamera = document.getElementById('btn-camera-toggle');
         const iconCamera = document.getElementById('camera-icon');
         let perspCamera = skinViewer.camera; 
@@ -396,7 +439,7 @@
             }
         };
 
-        // --- 3. Smooth Zooming ---
+        // --- 4. Smooth Zooming ---
         let targetZoom = 40; 
         let targetDistance = 30; 
         let currentDistance = 30;
@@ -433,7 +476,7 @@
             skinViewer.renderer.render(skinViewer.scene, skinViewer.camera);
         });
 
-        // --- 4. Sliders & Background ---
+        // --- 5. Sliders & Background ---
         const sliderHue = document.getElementById('bg-hue');
         const sliderBright = document.getElementById('bg-brightness');
         
@@ -470,7 +513,7 @@
         sliderHue.addEventListener('input', () => handleSliderInput(sliderHue, (v) => Math.round(v)));
         sliderBright.addEventListener('input', () => handleSliderInput(sliderBright, (v) => Math.round(v*100)));
 
-        // --- 5. Unified Tooltip Logic (Buttons + Sliders) ---
+        // --- 6. Unified Tooltip Logic (Buttons + Sliders) ---
         const tooltip = document.getElementById('cursor-tooltip');
         
         // Track mouse globally for tooltips
@@ -524,7 +567,7 @@
         });
 
 
-        // --- 6. Highlight & Raycasting ---
+        // --- 7. Highlight & Raycasting ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         let currentPart = null;
@@ -596,7 +639,7 @@
             }
         });
 
-        // --- 7. Context Menu & Previews ---
+        // --- 8. Context Menu & Previews ---
         const ctxMenu = document.getElementById('context-menu');
         
         let previewRendererBase, previewRendererOverlay;
@@ -714,17 +757,8 @@
             if (!ctxMenu.contains(e.target)) ctxMenu.style.display = 'none';
         });
 
-        // --- 8. Helper Functions ---
-        // File Upload
-        document.getElementById('btn-upload').onclick = () => document.getElementById('skin-input').click();
-        document.getElementById('skin-input').onchange = (e) => { if(e.target.files[0]) loadSkin(e.target.files[0]); };
-
-        function loadSkin(file) {
-            const reader = new FileReader();
-            reader.onload = (e) => skinViewer.loadSkin(e.target.result);
-            reader.readAsDataURL(file);
-        }
-
+        // --- 9. Other Helper Functions ---
+        
         // Modals
         const backdrop = document.getElementById('modal-backdrop');
         const modalBg = document.getElementById('modal-bg');
@@ -771,26 +805,7 @@
             }
         });
 
-        // Toggle Model
-        const modelBtn = document.getElementById('btn-model-toggle');
-        const modelIcon = document.getElementById('model-icon');
-        let currentModel = 'default';
-        modelBtn.onclick = () => {
-            if (currentModel === 'default') {
-                currentModel = 'slim';
-                modelBtn.setAttribute('data-tooltip', 'Slim');
-                modelIcon.innerText = 'girl';
-            } else {
-                currentModel = 'default';
-                modelBtn.setAttribute('data-tooltip', 'Standard');
-                modelIcon.innerText = 'boy';
-            }
-            skinViewer.loadSkin(skinViewer.skinUrl, { model: currentModel });
-             // Update tooltip immediately
-            const tooltip = document.getElementById('cursor-tooltip');
-            if(tooltip.style.opacity === '1') tooltip.innerText = modelBtn.getAttribute('data-tooltip');
-        };
-
+        // Drag & Drop / Paste Support
         const dropZone = document.getElementById('drop-zone');
         window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.display = 'flex'; setTimeout(()=>dropZone.style.opacity=1, 10); });
         window.addEventListener('dragleave', (e) => { if(e.target===dropZone) { dropZone.style.opacity=0; setTimeout(()=>dropZone.style.display='none',300); }});
