@@ -11,8 +11,9 @@
     
     <style>
         :root {
-            --bg-hue: 220deg;
+            --bg-hue: 220;
             --bg-brightness: 0.4;
+            --accent-color: hsl(220, 100%, 50%);
         }
 
         body, html {
@@ -38,6 +39,7 @@
             );
             filter: blur(20px);
             z-index: 0;
+            transition: background 0.1s linear; /* Slight optimization for smooth JS updates */
         }
 
         /* Canvas */
@@ -49,6 +51,7 @@
             height: 100%;
             z-index: 1;
             cursor: grab;
+            outline: none;
         }
         #skin_container:active {
             cursor: grabbing;
@@ -63,7 +66,7 @@
             z-index: 10;
             display: flex;
             gap: 12px;
-            pointer-events: none; /* Let clicks pass through gaps */
+            pointer-events: none;
         }
 
         .icon-btn {
@@ -89,10 +92,6 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
-        .material-symbols-outlined {
-            font-size: 24px;
-        }
-
         /* Floating Tooltip */
         #cursor-tooltip {
             position: fixed;
@@ -106,7 +105,6 @@
             opacity: 0;
             transition: opacity 0.15s;
             z-index: 1000;
-            transform: translate(15px, 15px);
         }
 
         /* Context Menu */
@@ -116,36 +114,53 @@
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 8px;
-            padding: 8px 0;
             display: none;
-            flex-direction: column;
+            flex-direction: row; /* Horizontal layout */
             z-index: 100;
             box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-            min-width: 160px;
+            width: 240px;
+            height: 90px;
+            overflow: hidden;
         }
 
-        .menu-item {
-            padding: 8px 16px;
-            color: #eee;
-            font-size: 14px;
-            cursor: pointer;
+        .ctx-section {
+            flex: 1;
+            border-right: 1px solid rgba(255,255,255,0.1);
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 10px;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.2s;
+        }
+        .ctx-section:last-child {
+            border-right: none;
+        }
+        .ctx-section:hover {
+            background: rgba(255,255,255,0.1);
         }
 
-        .menu-item:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-        
-        .menu-header {
-            padding: 4px 16px 8px;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+        .ctx-label {
+            position: absolute;
+            bottom: 4px;
+            font-size: 10px;
             color: #aaa;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            margin-bottom: 4px;
+            text-transform: uppercase;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .ctx-canvas {
+            width: 60px;
+            height: 60px;
+            pointer-events: none;
+        }
+
+        .ctx-icon {
+            font-size: 32px;
+            color: #eee;
         }
 
         /* Modals */
@@ -165,12 +180,6 @@
             border: 1px solid rgba(255,255,255,0.1);
         }
 
-        .modal h2 {
-            margin: 0 0 16px 0;
-            font-size: 18px;
-            font-weight: 500;
-        }
-
         .modal-backdrop {
             position: fixed;
             top: 0;
@@ -183,7 +192,8 @@
         }
 
         .slider-container {
-            margin-bottom: 16px;
+            margin-bottom: 20px;
+            position: relative;
         }
         .slider-container label {
             display: block;
@@ -191,11 +201,30 @@
             font-size: 14px;
             color: #aaa;
         }
-        input[type="range"] {
-            width: 100%;
-            accent-color: #5a76f3;
-        }
         
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            border: 2px solid #fff;
+            transition: transform 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Visibility Toggles in Modal */
         .toggle-row {
             display: flex;
             justify-content: space-between;
@@ -205,24 +234,15 @@
             background: rgba(255,255,255,0.05);
             border-radius: 8px;
         }
-        .toggle-row span {
-            font-size: 14px;
-        }
 
-        /* Drop Zone indicator */
         #drop-zone {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(90, 118, 243, 0.2);
             border: 4px dashed #5a76f3;
             box-sizing: border-box;
             z-index: 50;
             display: none;
-            pointer-events: none;
-            display: flex;
             align-items: center;
             justify-content: center;
             font-size: 24px;
@@ -230,6 +250,7 @@
             font-weight: bold;
             opacity: 0;
             transition: opacity 0.3s;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -241,46 +262,51 @@
 
     <!-- Top UI Buttons -->
     <div id="ui-layer">
-        <!-- Upload -->
         <div class="icon-btn" id="btn-upload" data-tooltip="Upload skin">
             <span class="material-symbols-outlined">frame_person</span>
             <input type="file" id="skin-input" accept="image/*" style="display: none;">
         </div>
 
-        <!-- Visibility Options -->
         <div class="icon-btn" id="btn-visibility" data-tooltip="Visibility options">
             <span class="material-symbols-outlined">visibility</span>
         </div>
 
-        <!-- Model Type Toggle (Standard/Slim) -->
         <div class="icon-btn" id="btn-model-toggle" data-tooltip="Standard">
             <span class="material-symbols-outlined" id="model-icon">boy</span>
         </div>
 
-        <!-- Background Override -->
+        <!-- New Perspective/Ortho Toggle -->
+        <div class="icon-btn" id="btn-camera-toggle" data-tooltip="Perspective view">
+            <span class="material-symbols-outlined" id="camera-icon">crop_free</span>
+        </div>
+
         <div class="icon-btn" id="btn-bg" data-tooltip="Override background">
             <span class="material-symbols-outlined">gradient</span>
         </div>
     </div>
 
-    <!-- Custom Cursor Tooltip -->
+    <!-- Tooltip -->
     <div id="cursor-tooltip"></div>
 
-    <!-- Right Click Context Menu -->
+    <!-- Context Menu -->
     <div id="context-menu">
-        <div class="menu-header" id="ctx-header">Part Name</div>
-        <div class="menu-item" id="ctx-toggle-base">
-            <span class="material-symbols-outlined" style="font-size: 16px">check_box</span> Toggle Base
+        <!-- Box 1: Base Layer Preview -->
+        <div class="ctx-section" id="ctx-box-1">
+            <div id="preview-base" class="ctx-canvas"></div>
+            <div class="ctx-label">Base</div>
         </div>
-        <div class="menu-item" id="ctx-toggle-overlay">
-            <span class="material-symbols-outlined" style="font-size: 16px">check_box</span> Toggle Overlay
+        <!-- Box 2: Overlay Layer Preview -->
+        <div class="ctx-section" id="ctx-box-2">
+            <div id="preview-overlay" class="ctx-canvas"></div>
+            <div class="ctx-label">Overlay</div>
         </div>
-        <div class="menu-item" id="ctx-toggle-both">
-            <span class="material-symbols-outlined" style="font-size: 16px">layers</span> Toggle Both
+        <!-- Box 3: Toggle Both -->
+        <div class="ctx-section" id="ctx-box-3">
+            <span class="material-symbols-outlined ctx-icon" id="icon-toggle-both">visibility</span>
+            <div class="ctx-label">Both</div>
         </div>
     </div>
 
-    <!-- Modal Backdrop -->
     <div class="modal-backdrop" id="modal-backdrop"></div>
 
     <!-- Background Settings Modal -->
@@ -288,20 +314,18 @@
         <h2>Background Settings</h2>
         <div class="slider-container">
             <label>Hue</label>
-            <input type="range" id="bg-hue" min="0" max="360" value="220">
+            <input type="range" id="bg-hue" min="0" max="360" value="220" step="any">
         </div>
         <div class="slider-container">
             <label>Brightness</label>
-            <input type="range" id="bg-brightness" min="0.1" max="1" step="0.1" value="0.4">
+            <input type="range" id="bg-brightness" min="0" max="1" step="any" value="0.4">
         </div>
     </div>
 
     <!-- Global Visibility Modal -->
     <div class="modal" id="modal-visibility">
         <h2>Visibility Options</h2>
-        <div id="vis-toggles">
-            <!-- Populated by JS -->
-        </div>
+        <div id="vis-toggles"></div>
     </div>
 
     <!-- Scripts -->
@@ -309,45 +333,172 @@
     <script src="https://cdn.jsdelivr.net/npm/skinview3d@3.0.0-alpha.1/bundles/skinview3d.bundle.js"></script>
 
     <script>
+        // --- 1. Initialization ---
         const skinViewer = new skinview3d.SkinViewer({
             canvas: document.getElementById("skin_container"),
             width: window.innerWidth,
             height: window.innerHeight,
-            skin: "https://textures.minecraft.net/texture/b3fbd8d74263672bf62c640e704024345228892f337f7173b2241680183145d8" // Default Steve
+            skin: "https://textures.minecraft.net/texture/b3fbd8d74263672bf62c640e704024345228892f337f7173b2241680183145d8"
         });
 
-        // Enable smoothed rotation
+        // Config
+        let isOrtho = false;
+        skinViewer.controls.enableZoom = false; // We handle zoom manually for smoothness
         skinViewer.controls.enableDamping = true;
         skinViewer.controls.dampingFactor = 0.05;
-        skinViewer.controls.rotateSpeed = 0.8;
-        skinViewer.controls.enableZoom = true;
 
-        // Resize handler
-        window.addEventListener('resize', () => {
-            skinViewer.width = window.innerWidth;
-            skinViewer.height = window.innerHeight;
+        // --- 2. Camera Switching ---
+        const btnCamera = document.getElementById('btn-camera-toggle');
+        const iconCamera = document.getElementById('camera-icon');
+        let perspCamera = skinViewer.camera; // Save default
+        let orthoCamera = new THREE.OrthographicCamera(
+            window.innerWidth / -2, window.innerWidth / 2, 
+            window.innerHeight / 2, window.innerHeight / -2, 
+            0.1, 1000
+        );
+        
+        // Sync Initial Positions
+        orthoCamera.position.copy(perspCamera.position);
+        orthoCamera.zoom = 40; // Initial ortho zoom
+        orthoCamera.updateProjectionMatrix();
+
+        btnCamera.onclick = () => {
+            isOrtho = !isOrtho;
+            if(isOrtho) {
+                // Switch to Ortho
+                // Copy orientation
+                const dist = skinViewer.camera.position.distanceTo(skinViewer.controls.target);
+                orthoCamera.position.copy(skinViewer.camera.position);
+                orthoCamera.quaternion.copy(skinViewer.camera.quaternion);
+                orthoCamera.zoom = Math.max(20, 1000 / dist); // Approximate zoom conversion
+                orthoCamera.updateProjectionMatrix();
+
+                skinViewer.camera = orthoCamera;
+                skinViewer.controls.object = orthoCamera;
+                
+                btnCamera.setAttribute('data-tooltip', 'Orthographic view');
+                iconCamera.innerText = 'deployed_code';
+            } else {
+                // Switch to Perspective
+                perspCamera.position.copy(skinViewer.camera.position);
+                perspCamera.quaternion.copy(skinViewer.camera.quaternion);
+                
+                skinViewer.camera = perspCamera;
+                skinViewer.controls.object = perspCamera;
+
+                btnCamera.setAttribute('data-tooltip', 'Perspective view');
+                iconCamera.innerText = 'crop_free';
+            }
+            updateTooltip(btnCamera);
+        };
+
+        // --- 3. Smooth Zooming ---
+        let targetZoom = 40; // For Ortho
+        let targetDistance = 30; // For Perspective
+        let currentDistance = 30;
+        
+        // Initialize target from start
+        targetDistance = skinViewer.camera.position.distanceTo(skinViewer.controls.target);
+
+        document.getElementById('skin_container').addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY * 0.001; // Sensitivity
+
+            if(isOrtho) {
+                // For ortho, we modify camera.zoom
+                // Zoom in = value goes UP
+                const factor = 1 - delta * 2; 
+                targetZoom *= factor;
+                targetZoom = Math.min(Math.max(targetZoom, 10), 200);
+            } else {
+                // For perspective, we modify distance
+                const factor = 1 + delta;
+                targetDistance *= factor;
+                targetDistance = Math.min(Math.max(targetDistance, 10), 100);
+            }
+        }, { passive: false });
+
+        // Animation Loop for Smooth Zoom & Sliders
+        skinViewer.renderer.setAnimationLoop(() => {
+            // 1. Damping for Zoom
+            if(isOrtho) {
+                skinViewer.camera.zoom += (targetZoom - skinViewer.camera.zoom) * 0.1;
+                skinViewer.camera.updateProjectionMatrix();
+            } else {
+                const dist = skinViewer.camera.position.distanceTo(skinViewer.controls.target);
+                currentDistance += (targetDistance - currentDistance) * 0.1;
+                
+                // Apply new distance while keeping direction
+                const direction = new THREE.Vector3().subVectors(skinViewer.camera.position, skinViewer.controls.target).normalize();
+                skinViewer.camera.position.copy(skinViewer.controls.target).add(direction.multiplyScalar(currentDistance));
+            }
+
+            // 2. Smooth Background Update
+            updateBackgroundSmooth();
+
+            // Render
+            skinViewer.renderer.render(skinViewer.scene, skinViewer.camera);
         });
 
-        // --- State ---
-        let currentModel = 'default'; // 'default' or 'slim'
-        let currentPart = null; // The part currently hovered
-        let skinURL = skinViewer.skinUrl;
+        // --- 4. Sliders & Background ---
+        const sliderHue = document.getElementById('bg-hue');
+        const sliderBright = document.getElementById('bg-brightness');
+        const bgElement = document.getElementById('background');
 
-        // --- Part Identification Logic ---
-        // Maps internal mesh names to logical groups
+        // Targets for lerping
+        let targetHue = 220;
+        let targetBright = 0.4;
+        let currentHue = 220;
+        let currentBright = 0.4;
+
+        function updateBackgroundSmooth() {
+            // Lerp values
+            currentHue += (targetHue - currentHue) * 0.1;
+            currentBright += (targetBright - currentBright) * 0.1;
+
+            // Apply to CSS
+            document.documentElement.style.setProperty('--bg-hue', currentHue);
+            document.documentElement.style.setProperty('--bg-brightness', currentBright);
+            document.documentElement.style.setProperty('--accent-color', `hsl(${currentHue}, 100%, 50%)`);
+        }
+
+        // Input listeners
+        sliderHue.addEventListener('input', (e) => {
+            targetHue = parseFloat(e.target.value);
+            showSliderTooltip(e.target, `${Math.round(targetHue)}°`);
+        });
+        sliderBright.addEventListener('input', (e) => {
+            targetBright = parseFloat(e.target.value);
+            showSliderTooltip(e.target, `${Math.round(targetBright * 100)}%`);
+        });
+
+        // Slider Tooltips
+        function showSliderTooltip(element, text) {
+            // Reuse the main tooltip
+            const tooltip = document.getElementById('cursor-tooltip');
+            const rect = element.getBoundingClientRect();
+            tooltip.style.opacity = '1';
+            tooltip.innerText = text;
+            tooltip.style.left = (rect.left + (rect.width/2) - 10) + 'px';
+            tooltip.style.top = (rect.top - 30) + 'px';
+        }
+        [sliderHue, sliderBright].forEach(el => {
+            el.addEventListener('mouseleave', () => document.getElementById('cursor-tooltip').style.opacity = '0');
+        });
+
+        // --- 5. Highlighting & Raycasting ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let currentPart = null;
+        let highlightMesh = null;
+
         function getPartName(mesh) {
-            if (!mesh || !mesh.parent) return null;
-            // Traverse up to find the group attached to player
+            // Traverse up to find known group
             let obj = mesh;
-            while(obj.parent && obj.parent !== skinViewer.playerObject) {
+            while(obj && obj.parent && obj.parent !== skinViewer.playerObject) {
                 obj = obj.parent;
             }
-            // skinview3d 3.0 structure typically:
-            // playerObject.children -> groups like 'head', 'body', 'leftArm', etc.
-            // Inner mesh name is usually 'head' or just 'inner' inside the group
-            // Outer mesh name is usually 'headLayer' or 'outer'
-            
-            // Map the Group or Mesh name to our logical parts
+            if(!obj) return null;
             const name = obj.name || mesh.name;
             
             if (name.includes('head')) return 'head';
@@ -359,149 +510,267 @@
             return null;
         }
 
-        function getFriendlyName(part) {
-            const map = {
-                'head': 'Head', 'body': 'Body',
-                'leftArm': 'Left Arm', 'rightArm': 'Right Arm',
-                'leftLeg': 'Left Leg', 'rightLeg': 'Right Leg'
-            };
-            return map[part] || part;
-        }
+        function createHighlight(partName) {
+            if(highlightMesh) {
+                highlightMesh.parent.remove(highlightMesh);
+                highlightMesh.geometry.dispose();
+                highlightMesh = null;
+            }
 
-        // --- Raycasting for Highlight & Context Menu ---
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
+            if(!partName) return;
 
-        // Highlight Effect
-        let highlightedMeshes = [];
-        const originalEmissives = new Map();
+            // Find the geometry to clone. The skin structure usually has the mesh inside the group.
+            // We want the OUTER layer geometry if available, or inner if not.
+            // Actually, for a highlight, usually boxing the whole part is best.
+            // We'll find the specific group in playerObject
+            const group = skinViewer.playerObject.children.find(c => (c.name || '').toLowerCase().includes(partName.toLowerCase()));
+            
+            if(group) {
+                // Find the mesh inside
+                let targetMesh = null;
+                group.traverse(c => {
+                    if(c.isMesh) targetMesh = c; // Grab first mesh (usually inner)
+                });
 
-        function clearHighlight() {
-            highlightedMeshes.forEach(mesh => {
-                if(originalEmissives.has(mesh.uuid)) {
-                    mesh.material.emissive.setHex(originalEmissives.get(mesh.uuid));
+                if(targetMesh) {
+                    const geom = targetMesh.geometry.clone();
+                    const mat = new THREE.MeshBasicMaterial({
+                        color: 0xffffff,
+                        transparent: true,
+                        opacity: 0.15,
+                        side: THREE.DoubleSide,
+                        depthWrite: false // render on top-ish
+                    });
+                    highlightMesh = new THREE.Mesh(geom, mat);
+                    highlightMesh.scale.set(1.15, 1.15, 1.15); // Scale up slightly to cover outer layer too
+                    group.add(highlightMesh);
                 }
-            });
-            highlightedMeshes = [];
-            originalEmissives.clear();
-            document.getElementById('skin_container').style.cursor = 'grab';
+            }
         }
 
-        function highlightPart(partName) {
-            clearHighlight();
-            if (!partName) return;
-
-            document.getElementById('skin_container').style.cursor = 'pointer';
-
-            // Find all meshes belonging to this part (inner & outer)
-            skinViewer.playerObject.traverse(child => {
-                if (child.isMesh) {
-                    const p = getPartName(child);
-                    if (p === partName) {
-                        // Store original emissive
-                        if(!originalEmissives.has(child.uuid)) {
-                            originalEmissives.set(child.uuid, child.material.emissive.getHex());
-                        }
-                        // Apply highlight (slight white glow)
-                        child.material.emissive.setHex(0x444444);
-                        highlightedMeshes.push(child);
-                    }
-                }
-            });
-        }
-
-        // Mouse Move Listener
-        const canvas = document.getElementById("skin_container");
-        canvas.addEventListener('mousemove', (event) => {
-            // Update mouse pos for raycaster
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+        document.getElementById("skin_container").addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = - (e.clientY / window.innerHeight) * 2 + 1;
 
             raycaster.setFromCamera(mouse, skinViewer.camera);
-            
-            // Intersect with player model
             const intersects = raycaster.intersectObject(skinViewer.playerObject, true);
             
-            if (intersects.length > 0) {
-                // Get the first visible mesh hit
-                const hit = intersects.find(i => i.object.visible);
-                if(hit) {
-                    const part = getPartName(hit.object);
-                    if (part !== currentPart) {
-                        currentPart = part;
-                        highlightPart(part);
-                    }
-                    return; // Stop if we found a part
+            // Filter out the highlight mesh itself
+            const hit = intersects.find(i => i.object !== highlightMesh && i.object.visible);
+
+            if (hit) {
+                const part = getPartName(hit.object);
+                if (part && part !== currentPart) {
+                    currentPart = part;
+                    createHighlight(part);
                 }
-            }
-            
-            // If no hit
-            if (currentPart !== null) {
+            } else if (currentPart) {
                 currentPart = null;
-                clearHighlight();
+                createHighlight(null);
             }
         });
 
-        // --- Context Menu ---
-        const contextMenu = document.getElementById('context-menu');
-        const modalBackdrop = document.getElementById('modal-backdrop');
+        // --- 6. Context Menu & 3D Previews ---
+        const ctxMenu = document.getElementById('context-menu');
+        
+        // Preview Renderers (Lazy Init)
+        let previewRendererBase, previewRendererOverlay;
+        let previewSceneBase, previewSceneOverlay;
+        let previewCamera;
 
-        canvas.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            if (currentPart) {
-                const friendly = getFriendlyName(currentPart);
-                document.getElementById('ctx-header').innerText = friendly;
-                
-                // Position menu
-                contextMenu.style.display = 'flex';
-                contextMenu.style.left = e.clientX + 'px';
-                contextMenu.style.top = e.clientY + 'px';
-                
-                // Adjust if out of bounds
-                const rect = contextMenu.getBoundingClientRect();
-                if(rect.right > window.innerWidth) contextMenu.style.left = (window.innerWidth - rect.width - 10) + 'px';
-                if(rect.bottom > window.innerHeight) contextMenu.style.top = (window.innerHeight - rect.height - 10) + 'px';
+        function initPreviewRenderers() {
+            if(previewRendererBase) return;
 
-                // Setup Actions
-                contextMenu.dataset.targetPart = currentPart;
-            }
-        });
+            // Shared Camera for previews
+            previewCamera = new THREE.OrthographicCamera(-8, 8, 8, -8, 0.1, 100);
+            previewCamera.position.z = 20;
 
-        // Close context menu on click elsewhere
-        window.addEventListener('click', () => {
-            contextMenu.style.display = 'none';
-        });
+            // Renderer Base
+            previewRendererBase = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            previewRendererBase.setSize(60, 60);
+            previewRendererBase.setClearColor(0x000000, 0);
+            document.getElementById('preview-base').appendChild(previewRendererBase.domElement);
+            previewSceneBase = new THREE.Scene();
 
-        function toggleLayer(part, layerType) {
-            // layerType: 'inner', 'outer', 'both'
-            const skinObj = skinViewer.playerObject.skin;
-            
-            // skinview3d object keys for parts:
-            // Inner: head, body, leftArm, rightArm, leftLeg, rightLeg
-            // Outer: headLayer, bodyLayer, leftArmLayer, rightArmLayer, leftLegLayer, rightLegLayer
-            
-            const innerKey = part;
-            const outerKey = part + "Layer";
+            // Renderer Overlay
+            previewRendererOverlay = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            previewRendererOverlay.setSize(60, 60);
+            previewRendererOverlay.setClearColor(0x000000, 0);
+            document.getElementById('preview-overlay').appendChild(previewRendererOverlay.domElement);
+            previewSceneOverlay = new THREE.Scene();
 
-            if (layerType === 'inner' || layerType === 'both') {
-                if(skinObj[innerKey]) skinObj[innerKey].visible = !skinObj[innerKey].visible;
-            }
-            if (layerType === 'outer' || layerType === 'both') {
-                if(skinObj[outerKey]) skinObj[outerKey].visible = !skinObj[outerKey].visible;
-            }
+            // Lighting for previews
+            [previewSceneBase, previewSceneOverlay].forEach(s => {
+                const amb = new THREE.AmbientLight(0xffffff, 0.8);
+                const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+                dir.position.set(0, 10, 10);
+                s.add(amb);
+                s.add(dir);
+            });
         }
 
-        document.getElementById('ctx-toggle-base').onclick = () => toggleLayer(contextMenu.dataset.targetPart, 'inner');
-        document.getElementById('ctx-toggle-overlay').onclick = () => toggleLayer(contextMenu.dataset.targetPart, 'outer');
-        document.getElementById('ctx-toggle-both').onclick = () => toggleLayer(contextMenu.dataset.targetPart, 'both');
+        function updatePreviews(partName) {
+            initPreviewRenderers();
 
+            // Clear old meshes
+            const clearScene = (s) => {
+                s.children.forEach(c => {
+                    if(c.isMesh || c.isGroup) s.remove(c);
+                });
+            };
+            clearScene(previewSceneBase);
+            clearScene(previewSceneOverlay);
 
-        // --- UI Buttons & Tooltips ---
+            // Clone specific part geometries
+            // We need to find the Inner and Outer meshes for the part
+            // Part naming in skinview3d: 'head', 'headLayer' (or similar logic)
+            
+            // NOTE: We need the actual Texture from the skinviewer
+            const texture = skinViewer.playerObject.skin.head.material.map; // Assuming loaded
+
+            const createClone = (meshName, scene) => {
+                const group = skinViewer.playerObject[meshName]; // Access directly if possible, or traverse
+                if(!group) return;
+
+                // Clone the mesh inside the group
+                group.traverse(c => {
+                    if(c.isMesh) {
+                        const newGeom = c.geometry.clone();
+                        // Reset center
+                        newGeom.center(); 
+                        
+                        const newMat = new THREE.MeshStandardMaterial({ 
+                            map: texture, 
+                            side: THREE.DoubleSide,
+                            transparent: true,
+                            alphaTest: 0.5
+                        });
+                        
+                        // Handle UVs if needed (skinview3d maps them correctly on geometry)
+                        const mesh = new THREE.Mesh(newGeom, newMat);
+                        
+                        // Sync rotation: The preview camera is static front. 
+                        // We rotate the OBJECT to match the main camera's relative angle.
+                        // Actually, simplified: match main player rotation + camera orbit.
+                        // Or just copy the quaternion of the player object?
+                        // The user wants "matching the current angle of the full skin".
+                        
+                        // Calculate relative rotation
+                        mesh.quaternion.copy(skinViewer.playerObject.quaternion);
+                        
+                        // Also apply camera orbit rotation inverse?
+                        // The main camera moves around. The preview camera is fixed.
+                        // To show the same view, we must rotate the mesh by the inverse of the main camera's azimuth/polar?
+                        // Easier: Copy main camera position relative to target, normalize, apply to preview camera.
+                        
+                        scene.add(mesh);
+                    }
+                });
+            }
+
+            // Map logical part to skinview3d property names
+            // Properties: head, body, rightArm, leftArm, rightLeg, leftLeg
+            // Layers: headLayer, bodyLayer, etc.
+            
+            createClone(partName, previewSceneBase);
+            createClone(partName + "Layer", previewSceneOverlay);
+
+            // Sync Camera Position to match View
+            const mainCamPos = skinViewer.camera.position.clone().sub(skinViewer.controls.target);
+            mainCamPos.normalize().multiplyScalar(20); // Scale to fit ortho
+            previewCamera.position.copy(mainCamPos);
+            previewCamera.lookAt(0,0,0);
+            previewCamera.updateProjectionMatrix();
+
+            // Render
+            previewRendererBase.render(previewSceneBase, previewCamera);
+            previewRendererOverlay.render(previewSceneOverlay, previewCamera);
+        }
+
+        // Context Menu Event
+        document.getElementById("skin_container").addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (currentPart) {
+                const rect = ctxMenu.getBoundingClientRect();
+                
+                // Position fixed at click
+                ctxMenu.style.display = 'flex';
+                let x = e.clientX;
+                let y = e.clientY;
+                
+                // Bounds check
+                if (x + 240 > window.innerWidth) x -= 240;
+                if (y + 90 > window.innerHeight) y -= 90;
+
+                ctxMenu.style.left = x + 'px';
+                ctxMenu.style.top = y + 'px';
+
+                // Populate Previews
+                updatePreviews(currentPart);
+                
+                // Update "Both" Icon
+                const inner = skinViewer.playerObject.skin[currentPart].visible;
+                const outer = skinViewer.playerObject.skin[currentPart + "Layer"].visible;
+                const icon = document.getElementById('icon-toggle-both');
+                
+                if (inner && outer) {
+                    icon.innerText = 'visibility_off'; // Shows action "Hide"
+                } else {
+                    icon.innerText = 'visibility'; // Shows action "Show"
+                }
+
+                // Store target
+                ctxMenu.dataset.target = currentPart;
+            }
+        });
+
+        // Context Menu Clicks
+        document.getElementById('ctx-box-1').onclick = () => {
+            const part = ctxMenu.dataset.target;
+            const mesh = skinViewer.playerObject.skin[part];
+            mesh.visible = !mesh.visible;
+            updatePreviews(part); // Re-render to show update? Or just toggle opacity
+            // Actually, we just rerender the preview to reflect visibility? 
+            // The preview shows the part regardless of visibility usually, but "toggle visibility" implies action on main skin.
+            // Let's toggle opacity of the PREVIEW to give feedback, or just keep it visible to show what it IS.
+            // Standard UI: The preview shows the part. The click toggles the main skin.
+        };
+        document.getElementById('ctx-box-2').onclick = () => {
+            const part = ctxMenu.dataset.target;
+            const mesh = skinViewer.playerObject.skin[part + "Layer"];
+            mesh.visible = !mesh.visible;
+        };
+        document.getElementById('ctx-box-3').onclick = () => {
+            const part = ctxMenu.dataset.target;
+            const inner = skinViewer.playerObject.skin[part];
+            const outer = skinViewer.playerObject.skin[part + "Layer"];
+            const bothVisible = inner.visible && outer.visible;
+            
+            inner.visible = !bothVisible;
+            outer.visible = !bothVisible;
+            
+            // Update icon
+            const icon = document.getElementById('icon-toggle-both');
+            icon.innerText = bothVisible ? 'visibility' : 'visibility_off';
+        };
+
+        // Close context menu
+        window.addEventListener('click', (e) => {
+            if (!ctxMenu.contains(e.target)) {
+                ctxMenu.style.display = 'none';
+            }
+        });
+
+        // --- 7. Other UI Logic (Copy-Pasted from previous & updated) ---
         
-        // Tooltip logic
-        const tooltip = document.getElementById('cursor-tooltip');
-        const buttons = document.querySelectorAll('.icon-btn');
+        // Tooltip Helper
+        function updateTooltip(element) {
+            const tooltip = document.getElementById('cursor-tooltip');
+            tooltip.innerText = element.getAttribute('data-tooltip');
+        }
 
+        const buttons = document.querySelectorAll('.icon-btn');
+        const tooltip = document.getElementById('cursor-tooltip');
         buttons.forEach(btn => {
             btn.addEventListener('mousemove', (e) => {
                 tooltip.style.opacity = '1';
@@ -509,146 +778,84 @@
                 tooltip.style.left = (e.clientX + 10) + 'px';
                 tooltip.style.top = (e.clientY + 10) + 'px';
             });
-            btn.addEventListener('mouseleave', () => {
-                tooltip.style.opacity = '0';
-            });
+            btn.addEventListener('mouseleave', () => tooltip.style.opacity = '0');
         });
 
-        // Upload
-        const uploadBtn = document.getElementById('btn-upload');
-        const fileInput = document.getElementById('skin-input');
-        uploadBtn.onclick = () => fileInput.click();
-        
-        fileInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if (file) loadSkinFile(file);
+        // File Upload
+        document.getElementById('btn-upload').onclick = () => document.getElementById('skin-input').click();
+        document.getElementById('skin-input').onchange = (e) => {
+            if(e.target.files[0]) loadSkin(e.target.files[0]);
         };
 
-        function loadSkinFile(file) {
+        function loadSkin(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                skinURL = e.target.result;
-                skinViewer.loadSkin(skinURL, { model: currentModel });
+                skinViewer.loadSkin(e.target.result);
+                // Reset model to detect automatically or keep current? 
+                // skinview3d detects model type from image dimensions usually.
             };
             reader.readAsDataURL(file);
         }
 
-        // Toggle Model (Slim/Standard)
-        const modelBtn = document.getElementById('btn-model-toggle');
-        const modelIcon = document.getElementById('model-icon');
-        
-        modelBtn.onclick = () => {
-            if (currentModel === 'default') {
-                currentModel = 'slim';
-                modelBtn.setAttribute('data-tooltip', 'Slim');
-                modelIcon.innerText = 'girl';
-            } else {
-                currentModel = 'default';
-                modelBtn.setAttribute('data-tooltip', 'Standard');
-                modelIcon.innerText = 'boy';
-            }
-            // Reload skin with new model
-            skinViewer.loadSkin(skinURL, { model: currentModel });
-            // Update tooltip immediately
-            tooltip.innerText = modelBtn.getAttribute('data-tooltip');
+        // Modals
+        const backdrop = document.getElementById('modal-backdrop');
+        const modalBg = document.getElementById('modal-bg');
+        const modalVis = document.getElementById('modal-visibility');
+
+        document.getElementById('btn-bg').onclick = () => {
+            modalBg.style.display = 'block';
+            backdrop.style.display = 'block';
         };
-
-        // Background Settings
-        const bgBtn = document.getElementById('btn-bg');
-        const bgModal = document.getElementById('modal-bg');
         
-        bgBtn.onclick = () => {
-            bgModal.style.display = 'block';
-            modalBackdrop.style.display = 'block';
-        };
-
-        // CSS Variable Updates for Background
-        const root = document.documentElement;
-        document.getElementById('bg-hue').addEventListener('input', (e) => {
-            root.style.setProperty('--bg-hue', e.target.value + 'deg');
-        });
-        document.getElementById('bg-brightness').addEventListener('input', (e) => {
-            root.style.setProperty('--bg-brightness', e.target.value);
-        });
-
-        // Visibility Modal
-        const visBtn = document.getElementById('btn-visibility');
-        const visModal = document.getElementById('modal-visibility');
-        const visContainer = document.getElementById('vis-toggles');
-
-        visBtn.onclick = () => {
-            // Re-generate toggles every time to sync state
-            visContainer.innerHTML = '';
-            const parts = ['head', 'body', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
-            
-            parts.forEach(part => {
-                const friendly = getFriendlyName(part);
+        document.getElementById('btn-visibility').onclick = () => {
+            // Populate
+            const list = document.getElementById('vis-toggles');
+            list.innerHTML = '';
+            ['head', 'body', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(part => {
                 const row = document.createElement('div');
                 row.className = 'toggle-row';
-                
-                // We check if either layer is visible to check the box (simplification)
-                // Ideally we have 2 checks, but let's do a master toggle for the part
-                const isVisible = skinViewer.playerObject.skin[part].visible;
-
-                row.innerHTML = `
-                    <span>${friendly}</span>
-                    <input type="checkbox" ${isVisible ? 'checked' : ''}>
-                `;
-                
-                const cb = row.querySelector('input');
-                cb.onchange = () => {
-                   // Toggle both layers for simplicity in this global menu
-                   skinViewer.playerObject.skin[part].visible = cb.checked;
-                   skinViewer.playerObject.skin[part + "Layer"].visible = cb.checked;
+                const isVis = skinViewer.playerObject.skin[part].visible;
+                row.innerHTML = `<span>${part}</span><input type="checkbox" ${isVis?'checked':''}>`;
+                row.querySelector('input').onchange = (e) => {
+                    skinViewer.playerObject.skin[part].visible = e.target.checked;
+                    skinViewer.playerObject.skin[part+"Layer"].visible = e.target.checked;
                 };
-                
-                visContainer.appendChild(row);
+                list.appendChild(row);
             });
-
-            visModal.style.display = 'block';
-            modalBackdrop.style.display = 'block';
+            modalVis.style.display = 'block';
+            backdrop.style.display = 'block';
         };
 
-        // Close Modals
-        modalBackdrop.onclick = () => {
-            bgModal.style.display = 'none';
-            visModal.style.display = 'none';
-            modalBackdrop.style.display = 'none';
+        backdrop.onclick = () => {
+            modalBg.style.display = 'none';
+            modalVis.style.display = 'none';
+            backdrop.style.display = 'none';
         };
 
-        // --- Drag & Drop / Paste ---
+        // Resize
+        window.addEventListener('resize', () => {
+            skinViewer.width = window.innerWidth;
+            skinViewer.height = window.innerHeight;
+            if(isOrtho) {
+                orthoCamera.left = window.innerWidth / -2;
+                orthoCamera.right = window.innerWidth / 2;
+                orthoCamera.top = window.innerHeight / 2;
+                orthoCamera.bottom = window.innerHeight / -2;
+                orthoCamera.updateProjectionMatrix();
+            }
+        });
+
+        // Drag Drop
         const dropZone = document.getElementById('drop-zone');
-
-        window.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.style.opacity = '1';
-            dropZone.style.display = 'flex';
-        });
-
-        window.addEventListener('dragleave', (e) => {
-            if(e.target === dropZone) {
-                dropZone.style.opacity = '0';
-                setTimeout(() => dropZone.style.display = 'none', 300);
-            }
-        });
-
+        window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.display = 'flex'; setTimeout(()=>dropZone.style.opacity=1, 10); });
+        window.addEventListener('dragleave', (e) => { if(e.target===dropZone) { dropZone.style.opacity=0; setTimeout(()=>dropZone.style.display='none',300); }});
         window.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.style.opacity = '0';
-            dropZone.style.display = 'none';
-            
-            if (e.dataTransfer.files.length > 0) {
-                loadSkinFile(e.dataTransfer.files[0]);
-            }
+            e.preventDefault(); dropZone.style.opacity=0; dropZone.style.display='none';
+            if(e.dataTransfer.files[0]) loadSkin(e.dataTransfer.files[0]);
         });
-
         window.addEventListener('paste', (e) => {
-            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-            for (const item of items) {
-                if (item.kind === 'file' && item.type.startsWith('image/')) {
-                    loadSkinFile(item.getAsFile());
-                }
-            }
+            const items = (e.clipboardData).items;
+            for(let item of items) { if(item.kind==='file') loadSkin(item.getAsFile()); }
         });
 
     </script>
