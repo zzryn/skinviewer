@@ -231,15 +231,68 @@
             transform: scale(1.2);
         }
 
-        /* Visibility Toggles in Modal */
+        /* Visibility Toggles - Stylized */
         .toggle-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
-            padding: 8px;
+            margin-bottom: 8px;
+            padding: 10px 12px;
             background: rgba(255,255,255,0.05);
             border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .toggle-row:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        /* Custom Checkbox Styling */
+        .custom-checkbox-container {
+            position: relative;
+            width: 24px;
+            height: 24px;
+        }
+        
+        /* Hide default checkbox */
+        .toggle-row input[type="checkbox"] {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+
+        .custom-checkbox {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 24px;
+            width: 24px;
+            background-color: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .toggle-row input:checked ~ .custom-checkbox {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        .custom-checkbox::after {
+            content: 'check'; /* Material Icon ligature */
+            font-family: 'Material Symbols Outlined';
+            font-size: 18px;
+            color: white;
+            display: none;
+        }
+
+        .toggle-row input:checked ~ .custom-checkbox::after {
+            display: block;
         }
 
         #drop-zone {
@@ -337,7 +390,6 @@
 
     <script>
         // --- 1. Initialization & State ---
-        // State variables to track the current skin and model
         let currentModel = 'default';
         let skinURL = "https://textures.minecraft.net/texture/b3fbd8d74263672bf62c640e704024345228892f337f7173b2241680183145d8";
 
@@ -356,22 +408,18 @@
         skinViewer.controls.dampingFactor = 0.05;
 
         // --- 2. File Loading & Model Toggling ---
-        
-        // Helper to load skin and maintain state
         function loadSkin(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                skinURL = e.target.result; // Update global state
+                skinURL = e.target.result; 
                 skinViewer.loadSkin(skinURL, { model: currentModel });
             };
             reader.readAsDataURL(file);
         }
 
-        // Upload Button Logic
         document.getElementById('btn-upload').onclick = () => document.getElementById('skin-input').click();
         document.getElementById('skin-input').onchange = (e) => { if(e.target.files[0]) loadSkin(e.target.files[0]); };
 
-        // Toggle Model Button Logic (Restored)
         const modelBtn = document.getElementById('btn-model-toggle');
         const modelIcon = document.getElementById('model-icon');
         
@@ -385,10 +433,7 @@
                 modelBtn.setAttribute('data-tooltip', 'Standard');
                 modelIcon.innerText = 'boy';
             }
-            // Reload using the stored URL and new model
             skinViewer.loadSkin(skinURL, { model: currentModel });
-            
-            // Update tooltip immediately
             const tooltip = document.getElementById('cursor-tooltip');
             if(tooltip.style.opacity === '1') tooltip.innerText = modelBtn.getAttribute('data-tooltip');
         };
@@ -432,7 +477,6 @@
                 btnCamera.setAttribute('data-tooltip', 'Perspective view');
                 iconCamera.innerText = 'crop_free';
             }
-            // Update tooltip text immediately if hovering
             const tooltip = document.getElementById('cursor-tooltip');
             if(tooltip.style.opacity === '1' && tooltip.innerText.includes('view')) {
                 tooltip.innerText = btnCamera.getAttribute('data-tooltip');
@@ -461,7 +505,6 @@
         }, { passive: false });
 
         skinViewer.renderer.setAnimationLoop(() => {
-            // Zoom Damping
             if(isOrtho) {
                 skinViewer.camera.zoom += (targetZoom - skinViewer.camera.zoom) * 0.1;
                 skinViewer.camera.updateProjectionMatrix();
@@ -471,7 +514,6 @@
                 const direction = new THREE.Vector3().subVectors(skinViewer.camera.position, skinViewer.controls.target).normalize();
                 skinViewer.camera.position.copy(skinViewer.controls.target).add(direction.multiplyScalar(currentDistance));
             }
-            // Smooth Background
             updateBackgroundSmooth();
             skinViewer.renderer.render(skinViewer.scene, skinViewer.camera);
         });
@@ -494,36 +536,28 @@
             document.documentElement.style.setProperty('--accent-color', `hsl(${currentHue}, 100%, 50%)`);
         }
 
-        // Slider Input Logic
         function handleSliderInput(slider, valProcessor) {
             const rawVal = parseFloat(slider.value);
-            // Update tooltip text content
             const template = slider.getAttribute('data-tooltip-template');
             const displayVal = valProcessor(rawVal);
             slider.setAttribute('data-current-tooltip', template.replace('{}', displayVal));
             
-            // Immediately update the global target values
             if(slider.id === 'bg-hue') targetHue = rawVal;
             if(slider.id === 'bg-brightness') targetBright = rawVal;
             
-            // Force tooltip update position/text
             updateTooltipState(slider); 
         }
 
         sliderHue.addEventListener('input', () => handleSliderInput(sliderHue, (v) => Math.round(v)));
         sliderBright.addEventListener('input', () => handleSliderInput(sliderBright, (v) => Math.round(v*100)));
 
-        // --- 6. Unified Tooltip Logic (Buttons + Sliders) ---
+        // --- 6. Tooltip Logic ---
         const tooltip = document.getElementById('cursor-tooltip');
-        
-        // Track mouse globally for tooltips
         let mouseX = 0;
         let mouseY = 0;
         window.addEventListener('mousemove', (e) => {
             mouseX = e.clientX;
             mouseY = e.clientY;
-            
-            // If tooltip is visible, update its position
             if (tooltip.style.opacity === '1') {
                 tooltip.style.left = (mouseX + 15) + 'px';
                 tooltip.style.top = (mouseY + 15) + 'px';
@@ -546,18 +580,13 @@
             }
         }
 
-        function hideTooltip() {
-            tooltip.style.opacity = '0';
-        }
+        function hideTooltip() { tooltip.style.opacity = '0'; }
 
-        // Bind tooltip events to buttons and sliders
         const tooltipElements = [...document.querySelectorAll('.icon-btn'), sliderHue, sliderBright];
         tooltipElements.forEach(el => {
             el.addEventListener('mouseenter', () => updateTooltipState(el));
-            el.addEventListener('mousemove', () => updateTooltipState(el)); // Keep syncing text/state
+            el.addEventListener('mousemove', () => updateTooltipState(el));
             el.addEventListener('mouseleave', hideTooltip);
-            
-            // Initialize slider tooltips on first hover
             if(el.tagName === 'INPUT') {
                  const rawVal = parseFloat(el.value);
                  const template = el.getAttribute('data-tooltip-template');
@@ -641,10 +670,7 @@
 
         // --- 8. Context Menu & Previews ---
         const ctxMenu = document.getElementById('context-menu');
-        
-        let previewRendererBase, previewRendererOverlay;
-        let previewSceneBase, previewSceneOverlay;
-        let previewCamera;
+        let previewRendererBase, previewRendererOverlay, previewSceneBase, previewSceneOverlay, previewCamera;
 
         function initPreviewRenderers() {
             if(previewRendererBase) return;
@@ -672,7 +698,6 @@
 
         function updatePreviews(partName) {
             initPreviewRenderers();
-            
             const clearScene = (s) => { s.children.forEach(c => { if(c.isMesh||c.isGroup) s.remove(c); }); };
             clearScene(previewSceneBase);
             clearScene(previewSceneOverlay);
@@ -757,9 +782,7 @@
             if (!ctxMenu.contains(e.target)) ctxMenu.style.display = 'none';
         });
 
-        // --- 9. Other Helper Functions ---
-        
-        // Modals
+        // --- 9. Modal & Stylized Checkboxes ---
         const backdrop = document.getElementById('modal-backdrop');
         const modalBg = document.getElementById('modal-bg');
         const modalVis = document.getElementById('modal-visibility');
@@ -769,20 +792,42 @@
             backdrop.style.display = 'block';
         };
         
+        function formatPartName(name) {
+            // camelCase to Normal Text (e.g., leftArm -> Left Arm)
+            const result = name.replace(/([A-Z])/g, " $1");
+            return result.charAt(0).toUpperCase() + result.slice(1);
+        }
+
         document.getElementById('btn-visibility').onclick = () => {
             const list = document.getElementById('vis-toggles');
             list.innerHTML = '';
+            
             ['head', 'body', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(part => {
-                const row = document.createElement('div');
+                const row = document.createElement('label'); // Using label for easy click
                 row.className = 'toggle-row';
+                
                 const isVis = skinViewer.playerObject.skin[part].visible;
-                row.innerHTML = `<span>${part}</span><input type="checkbox" ${isVis?'checked':''}>`;
-                row.querySelector('input').onchange = (e) => {
-                    skinViewer.playerObject.skin[part].visible = e.target.checked;
-                    skinViewer.playerObject.skin[part+"Layer"].visible = e.target.checked;
+                
+                // Custom checkbox structure
+                row.innerHTML = `
+                    <span>${formatPartName(part)}</span>
+                    <div class="custom-checkbox-container">
+                        <input type="checkbox" ${isVis ? 'checked' : ''}>
+                        <div class="custom-checkbox"></div>
+                    </div>
+                `;
+                
+                const input = row.querySelector('input');
+                input.onchange = (e) => {
+                    const checked = e.target.checked;
+                    // Toggle visibility of both main part and layer
+                    skinViewer.playerObject.skin[part].visible = checked;
+                    skinViewer.playerObject.skin[part + "Layer"].visible = checked;
                 };
+                
                 list.appendChild(row);
             });
+            
             modalVis.style.display = 'block';
             backdrop.style.display = 'block';
         };
@@ -793,6 +838,7 @@
             backdrop.style.display = 'none';
         };
 
+        // Resize Logic
         window.addEventListener('resize', () => {
             skinViewer.width = window.innerWidth;
             skinViewer.height = window.innerHeight;
@@ -805,7 +851,7 @@
             }
         });
 
-        // Drag & Drop / Paste Support
+        // Drag/Paste
         const dropZone = document.getElementById('drop-zone');
         window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.display = 'flex'; setTimeout(()=>dropZone.style.opacity=1, 10); });
         window.addEventListener('dragleave', (e) => { if(e.target===dropZone) { dropZone.style.opacity=0; setTimeout(()=>dropZone.style.display='none',300); }});
