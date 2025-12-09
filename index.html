@@ -39,7 +39,7 @@
             );
             filter: blur(20px);
             z-index: 0;
-            transition: background 0.1s linear; /* Slight optimization for smooth JS updates */
+            transition: background 0.1s linear;
         }
 
         /* Canvas */
@@ -163,13 +163,18 @@
             color: #eee;
         }
 
-        /* Modals */
+        /* Modals (Refined for Frosted Theme) */
         .modal {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: #1e1e1e;
+            
+            /* Dynamic Frosted Background */
+            background: hsla(var(--bg-hue), 20%, 15%, 0.85); 
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            
             color: white;
             padding: 24px;
             border-radius: 16px;
@@ -177,7 +182,9 @@
             z-index: 200;
             display: none;
             width: 300px;
-            border: 1px solid rgba(255,255,255,0.1);
+            
+            /* Subtle border matching the hue */
+            border: 1px solid hsla(var(--bg-hue), 50%, 80%, 0.2);
         }
 
         .modal-backdrop {
@@ -275,7 +282,6 @@
             <span class="material-symbols-outlined" id="model-icon">boy</span>
         </div>
 
-        <!-- New Perspective/Ortho Toggle -->
         <div class="icon-btn" id="btn-camera-toggle" data-tooltip="Perspective view">
             <span class="material-symbols-outlined" id="camera-icon">crop_free</span>
         </div>
@@ -290,17 +296,14 @@
 
     <!-- Context Menu -->
     <div id="context-menu">
-        <!-- Box 1: Base Layer Preview -->
         <div class="ctx-section" id="ctx-box-1">
             <div id="preview-base" class="ctx-canvas"></div>
             <div class="ctx-label">Base</div>
         </div>
-        <!-- Box 2: Overlay Layer Preview -->
         <div class="ctx-section" id="ctx-box-2">
             <div id="preview-overlay" class="ctx-canvas"></div>
             <div class="ctx-label">Overlay</div>
         </div>
-        <!-- Box 3: Toggle Both -->
         <div class="ctx-section" id="ctx-box-3">
             <span class="material-symbols-outlined ctx-icon" id="icon-toggle-both">visibility</span>
             <div class="ctx-label">Both</div>
@@ -314,11 +317,12 @@
         <h2>Background Settings</h2>
         <div class="slider-container">
             <label>Hue</label>
-            <input type="range" id="bg-hue" min="0" max="360" value="220" step="any">
+            <!-- Added data-tooltip attribute for uniformity -->
+            <input type="range" id="bg-hue" min="0" max="360" value="220" step="any" data-tooltip-template="{}°">
         </div>
         <div class="slider-container">
             <label>Brightness</label>
-            <input type="range" id="bg-brightness" min="0" max="1" step="any" value="0.4">
+            <input type="range" id="bg-brightness" min="0" max="1" step="any" value="0.4" data-tooltip-template="{}%">
         </div>
     </div>
 
@@ -343,34 +347,31 @@
 
         // Config
         let isOrtho = false;
-        skinViewer.controls.enableZoom = false; // We handle zoom manually for smoothness
+        skinViewer.controls.enableZoom = false; 
         skinViewer.controls.enableDamping = true;
         skinViewer.controls.dampingFactor = 0.05;
 
         // --- 2. Camera Switching ---
         const btnCamera = document.getElementById('btn-camera-toggle');
         const iconCamera = document.getElementById('camera-icon');
-        let perspCamera = skinViewer.camera; // Save default
+        let perspCamera = skinViewer.camera; 
         let orthoCamera = new THREE.OrthographicCamera(
             window.innerWidth / -2, window.innerWidth / 2, 
             window.innerHeight / 2, window.innerHeight / -2, 
             0.1, 1000
         );
         
-        // Sync Initial Positions
         orthoCamera.position.copy(perspCamera.position);
-        orthoCamera.zoom = 40; // Initial ortho zoom
+        orthoCamera.zoom = 40; 
         orthoCamera.updateProjectionMatrix();
 
         btnCamera.onclick = () => {
             isOrtho = !isOrtho;
             if(isOrtho) {
-                // Switch to Ortho
-                // Copy orientation
                 const dist = skinViewer.camera.position.distanceTo(skinViewer.controls.target);
                 orthoCamera.position.copy(skinViewer.camera.position);
                 orthoCamera.quaternion.copy(skinViewer.camera.quaternion);
-                orthoCamera.zoom = Math.max(20, 1000 / dist); // Approximate zoom conversion
+                orthoCamera.zoom = Math.max(20, 1000 / dist); 
                 orthoCamera.updateProjectionMatrix();
 
                 skinViewer.camera = orthoCamera;
@@ -379,7 +380,6 @@
                 btnCamera.setAttribute('data-tooltip', 'Orthographic view');
                 iconCamera.innerText = 'deployed_code';
             } else {
-                // Switch to Perspective
                 perspCamera.position.copy(skinViewer.camera.position);
                 perspCamera.quaternion.copy(skinViewer.camera.quaternion);
                 
@@ -389,111 +389,148 @@
                 btnCamera.setAttribute('data-tooltip', 'Perspective view');
                 iconCamera.innerText = 'crop_free';
             }
-            updateTooltip(btnCamera);
+            // Update tooltip text immediately if hovering
+            const tooltip = document.getElementById('cursor-tooltip');
+            if(tooltip.style.opacity === '1' && tooltip.innerText.includes('view')) {
+                tooltip.innerText = btnCamera.getAttribute('data-tooltip');
+            }
         };
 
         // --- 3. Smooth Zooming ---
-        let targetZoom = 40; // For Ortho
-        let targetDistance = 30; // For Perspective
+        let targetZoom = 40; 
+        let targetDistance = 30; 
         let currentDistance = 30;
-        
-        // Initialize target from start
         targetDistance = skinViewer.camera.position.distanceTo(skinViewer.controls.target);
 
         document.getElementById('skin_container').addEventListener('wheel', (e) => {
             e.preventDefault();
-            const delta = e.deltaY * 0.001; // Sensitivity
+            const delta = e.deltaY * 0.001; 
 
             if(isOrtho) {
-                // For ortho, we modify camera.zoom
-                // Zoom in = value goes UP
                 const factor = 1 - delta * 2; 
                 targetZoom *= factor;
                 targetZoom = Math.min(Math.max(targetZoom, 10), 200);
             } else {
-                // For perspective, we modify distance
                 const factor = 1 + delta;
                 targetDistance *= factor;
                 targetDistance = Math.min(Math.max(targetDistance, 10), 100);
             }
         }, { passive: false });
 
-        // Animation Loop for Smooth Zoom & Sliders
         skinViewer.renderer.setAnimationLoop(() => {
-            // 1. Damping for Zoom
+            // Zoom Damping
             if(isOrtho) {
                 skinViewer.camera.zoom += (targetZoom - skinViewer.camera.zoom) * 0.1;
                 skinViewer.camera.updateProjectionMatrix();
             } else {
                 const dist = skinViewer.camera.position.distanceTo(skinViewer.controls.target);
                 currentDistance += (targetDistance - currentDistance) * 0.1;
-                
-                // Apply new distance while keeping direction
                 const direction = new THREE.Vector3().subVectors(skinViewer.camera.position, skinViewer.controls.target).normalize();
                 skinViewer.camera.position.copy(skinViewer.controls.target).add(direction.multiplyScalar(currentDistance));
             }
-
-            // 2. Smooth Background Update
+            // Smooth Background
             updateBackgroundSmooth();
-
-            // Render
             skinViewer.renderer.render(skinViewer.scene, skinViewer.camera);
         });
 
         // --- 4. Sliders & Background ---
         const sliderHue = document.getElementById('bg-hue');
         const sliderBright = document.getElementById('bg-brightness');
-        const bgElement = document.getElementById('background');
-
-        // Targets for lerping
+        
         let targetHue = 220;
         let targetBright = 0.4;
         let currentHue = 220;
         let currentBright = 0.4;
 
         function updateBackgroundSmooth() {
-            // Lerp values
             currentHue += (targetHue - currentHue) * 0.1;
             currentBright += (targetBright - currentBright) * 0.1;
 
-            // Apply to CSS
             document.documentElement.style.setProperty('--bg-hue', currentHue);
             document.documentElement.style.setProperty('--bg-brightness', currentBright);
             document.documentElement.style.setProperty('--accent-color', `hsl(${currentHue}, 100%, 50%)`);
         }
 
-        // Input listeners
-        sliderHue.addEventListener('input', (e) => {
-            targetHue = parseFloat(e.target.value);
-            showSliderTooltip(e.target, `${Math.round(targetHue)}°`);
-        });
-        sliderBright.addEventListener('input', (e) => {
-            targetBright = parseFloat(e.target.value);
-            showSliderTooltip(e.target, `${Math.round(targetBright * 100)}%`);
-        });
-
-        // Slider Tooltips
-        function showSliderTooltip(element, text) {
-            // Reuse the main tooltip
-            const tooltip = document.getElementById('cursor-tooltip');
-            const rect = element.getBoundingClientRect();
-            tooltip.style.opacity = '1';
-            tooltip.innerText = text;
-            tooltip.style.left = (rect.left + (rect.width/2) - 10) + 'px';
-            tooltip.style.top = (rect.top - 30) + 'px';
+        // Slider Input Logic
+        function handleSliderInput(slider, valProcessor) {
+            const rawVal = parseFloat(slider.value);
+            // Update tooltip text content
+            const template = slider.getAttribute('data-tooltip-template');
+            const displayVal = valProcessor(rawVal);
+            slider.setAttribute('data-current-tooltip', template.replace('{}', displayVal));
+            
+            // Immediately update the global target values
+            if(slider.id === 'bg-hue') targetHue = rawVal;
+            if(slider.id === 'bg-brightness') targetBright = rawVal;
+            
+            // Force tooltip update position/text
+            updateTooltipState(slider); 
         }
-        [sliderHue, sliderBright].forEach(el => {
-            el.addEventListener('mouseleave', () => document.getElementById('cursor-tooltip').style.opacity = '0');
+
+        sliderHue.addEventListener('input', () => handleSliderInput(sliderHue, (v) => Math.round(v)));
+        sliderBright.addEventListener('input', () => handleSliderInput(sliderBright, (v) => Math.round(v*100)));
+
+        // --- 5. Unified Tooltip Logic (Buttons + Sliders) ---
+        const tooltip = document.getElementById('cursor-tooltip');
+        
+        // Track mouse globally for tooltips
+        let mouseX = 0;
+        let mouseY = 0;
+        window.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            // If tooltip is visible, update its position
+            if (tooltip.style.opacity === '1') {
+                tooltip.style.left = (mouseX + 15) + 'px';
+                tooltip.style.top = (mouseY + 15) + 'px';
+            }
         });
 
-        // --- 5. Highlighting & Raycasting ---
+        function updateTooltipState(element) {
+            let text = '';
+            if (element.classList.contains('icon-btn')) {
+                text = element.getAttribute('data-tooltip');
+            } else if (element.tagName === 'INPUT') {
+                text = element.getAttribute('data-current-tooltip');
+            }
+
+            if (text) {
+                tooltip.innerText = text;
+                tooltip.style.opacity = '1';
+                tooltip.style.left = (mouseX + 15) + 'px';
+                tooltip.style.top = (mouseY + 15) + 'px';
+            }
+        }
+
+        function hideTooltip() {
+            tooltip.style.opacity = '0';
+        }
+
+        // Bind tooltip events to buttons and sliders
+        const tooltipElements = [...document.querySelectorAll('.icon-btn'), sliderHue, sliderBright];
+        tooltipElements.forEach(el => {
+            el.addEventListener('mouseenter', () => updateTooltipState(el));
+            el.addEventListener('mousemove', () => updateTooltipState(el)); // Keep syncing text/state
+            el.addEventListener('mouseleave', hideTooltip);
+            
+            // Initialize slider tooltips on first hover
+            if(el.tagName === 'INPUT') {
+                 const rawVal = parseFloat(el.value);
+                 const template = el.getAttribute('data-tooltip-template');
+                 const val = el.id.includes('hue') ? Math.round(rawVal) : Math.round(rawVal*100);
+                 el.setAttribute('data-current-tooltip', template.replace('{}', val));
+            }
+        });
+
+
+        // --- 6. Highlight & Raycasting ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         let currentPart = null;
         let highlightMesh = null;
 
         function getPartName(mesh) {
-            // Traverse up to find known group
             let obj = mesh;
             while(obj && obj.parent && obj.parent !== skinViewer.playerObject) {
                 obj = obj.parent;
@@ -516,22 +553,13 @@
                 highlightMesh.geometry.dispose();
                 highlightMesh = null;
             }
-
             if(!partName) return;
 
-            // Find the geometry to clone. The skin structure usually has the mesh inside the group.
-            // We want the OUTER layer geometry if available, or inner if not.
-            // Actually, for a highlight, usually boxing the whole part is best.
-            // We'll find the specific group in playerObject
             const group = skinViewer.playerObject.children.find(c => (c.name || '').toLowerCase().includes(partName.toLowerCase()));
             
             if(group) {
-                // Find the mesh inside
                 let targetMesh = null;
-                group.traverse(c => {
-                    if(c.isMesh) targetMesh = c; // Grab first mesh (usually inner)
-                });
-
+                group.traverse(c => { if(c.isMesh) targetMesh = c; });
                 if(targetMesh) {
                     const geom = targetMesh.geometry.clone();
                     const mat = new THREE.MeshBasicMaterial({
@@ -539,10 +567,10 @@
                         transparent: true,
                         opacity: 0.15,
                         side: THREE.DoubleSide,
-                        depthWrite: false // render on top-ish
+                        depthWrite: false
                     });
                     highlightMesh = new THREE.Mesh(geom, mat);
-                    highlightMesh.scale.set(1.15, 1.15, 1.15); // Scale up slightly to cover outer layer too
+                    highlightMesh.scale.set(1.15, 1.15, 1.15); 
                     group.add(highlightMesh);
                 }
             }
@@ -554,8 +582,6 @@
 
             raycaster.setFromCamera(mouse, skinViewer.camera);
             const intersects = raycaster.intersectObject(skinViewer.playerObject, true);
-            
-            // Filter out the highlight mesh itself
             const hit = intersects.find(i => i.object !== highlightMesh && i.object.visible);
 
             if (hit) {
@@ -570,36 +596,28 @@
             }
         });
 
-        // --- 6. Context Menu & 3D Previews ---
+        // --- 7. Context Menu & Previews ---
         const ctxMenu = document.getElementById('context-menu');
         
-        // Preview Renderers (Lazy Init)
         let previewRendererBase, previewRendererOverlay;
         let previewSceneBase, previewSceneOverlay;
         let previewCamera;
 
         function initPreviewRenderers() {
             if(previewRendererBase) return;
-
-            // Shared Camera for previews
             previewCamera = new THREE.OrthographicCamera(-8, 8, 8, -8, 0.1, 100);
             previewCamera.position.z = 20;
 
-            // Renderer Base
             previewRendererBase = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             previewRendererBase.setSize(60, 60);
-            previewRendererBase.setClearColor(0x000000, 0);
             document.getElementById('preview-base').appendChild(previewRendererBase.domElement);
             previewSceneBase = new THREE.Scene();
 
-            // Renderer Overlay
             previewRendererOverlay = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             previewRendererOverlay.setSize(60, 60);
-            previewRendererOverlay.setClearColor(0x000000, 0);
             document.getElementById('preview-overlay').appendChild(previewRendererOverlay.domElement);
             previewSceneOverlay = new THREE.Scene();
 
-            // Lighting for previews
             [previewSceneBase, previewSceneOverlay].forEach(s => {
                 const amb = new THREE.AmbientLight(0xffffff, 0.8);
                 const dir = new THREE.DirectionalLight(0xffffff, 0.5);
@@ -611,189 +629,99 @@
 
         function updatePreviews(partName) {
             initPreviewRenderers();
-
-            // Clear old meshes
-            const clearScene = (s) => {
-                s.children.forEach(c => {
-                    if(c.isMesh || c.isGroup) s.remove(c);
-                });
-            };
+            
+            const clearScene = (s) => { s.children.forEach(c => { if(c.isMesh||c.isGroup) s.remove(c); }); };
             clearScene(previewSceneBase);
             clearScene(previewSceneOverlay);
 
-            // Clone specific part geometries
-            // We need to find the Inner and Outer meshes for the part
-            // Part naming in skinview3d: 'head', 'headLayer' (or similar logic)
-            
-            // NOTE: We need the actual Texture from the skinviewer
-            const texture = skinViewer.playerObject.skin.head.material.map; // Assuming loaded
+            const texture = skinViewer.playerObject.skin.head.material.map;
 
             const createClone = (meshName, scene) => {
-                const group = skinViewer.playerObject[meshName]; // Access directly if possible, or traverse
+                const group = skinViewer.playerObject[meshName]; 
                 if(!group) return;
-
-                // Clone the mesh inside the group
                 group.traverse(c => {
                     if(c.isMesh) {
                         const newGeom = c.geometry.clone();
-                        // Reset center
                         newGeom.center(); 
-                        
                         const newMat = new THREE.MeshStandardMaterial({ 
-                            map: texture, 
-                            side: THREE.DoubleSide,
-                            transparent: true,
-                            alphaTest: 0.5
+                            map: texture, side: THREE.DoubleSide, transparent: true, alphaTest: 0.5
                         });
-                        
-                        // Handle UVs if needed (skinview3d maps them correctly on geometry)
                         const mesh = new THREE.Mesh(newGeom, newMat);
-                        
-                        // Sync rotation: The preview camera is static front. 
-                        // We rotate the OBJECT to match the main camera's relative angle.
-                        // Actually, simplified: match main player rotation + camera orbit.
-                        // Or just copy the quaternion of the player object?
-                        // The user wants "matching the current angle of the full skin".
-                        
-                        // Calculate relative rotation
                         mesh.quaternion.copy(skinViewer.playerObject.quaternion);
-                        
-                        // Also apply camera orbit rotation inverse?
-                        // The main camera moves around. The preview camera is fixed.
-                        // To show the same view, we must rotate the mesh by the inverse of the main camera's azimuth/polar?
-                        // Easier: Copy main camera position relative to target, normalize, apply to preview camera.
-                        
                         scene.add(mesh);
                     }
                 });
             }
-
-            // Map logical part to skinview3d property names
-            // Properties: head, body, rightArm, leftArm, rightLeg, leftLeg
-            // Layers: headLayer, bodyLayer, etc.
-            
             createClone(partName, previewSceneBase);
             createClone(partName + "Layer", previewSceneOverlay);
 
-            // Sync Camera Position to match View
             const mainCamPos = skinViewer.camera.position.clone().sub(skinViewer.controls.target);
-            mainCamPos.normalize().multiplyScalar(20); // Scale to fit ortho
+            mainCamPos.normalize().multiplyScalar(20); 
             previewCamera.position.copy(mainCamPos);
             previewCamera.lookAt(0,0,0);
             previewCamera.updateProjectionMatrix();
 
-            // Render
             previewRendererBase.render(previewSceneBase, previewCamera);
             previewRendererOverlay.render(previewSceneOverlay, previewCamera);
         }
 
-        // Context Menu Event
         document.getElementById("skin_container").addEventListener('contextmenu', (e) => {
             e.preventDefault();
             if (currentPart) {
-                const rect = ctxMenu.getBoundingClientRect();
-                
-                // Position fixed at click
                 ctxMenu.style.display = 'flex';
                 let x = e.clientX;
                 let y = e.clientY;
-                
-                // Bounds check
                 if (x + 240 > window.innerWidth) x -= 240;
                 if (y + 90 > window.innerHeight) y -= 90;
-
                 ctxMenu.style.left = x + 'px';
                 ctxMenu.style.top = y + 'px';
 
-                // Populate Previews
                 updatePreviews(currentPart);
                 
-                // Update "Both" Icon
                 const inner = skinViewer.playerObject.skin[currentPart].visible;
                 const outer = skinViewer.playerObject.skin[currentPart + "Layer"].visible;
                 const icon = document.getElementById('icon-toggle-both');
                 
-                if (inner && outer) {
-                    icon.innerText = 'visibility_off'; // Shows action "Hide"
-                } else {
-                    icon.innerText = 'visibility'; // Shows action "Show"
-                }
-
-                // Store target
+                icon.innerText = (inner && outer) ? 'visibility_off' : 'visibility';
                 ctxMenu.dataset.target = currentPart;
             }
         });
 
-        // Context Menu Clicks
         document.getElementById('ctx-box-1').onclick = () => {
             const part = ctxMenu.dataset.target;
             const mesh = skinViewer.playerObject.skin[part];
             mesh.visible = !mesh.visible;
-            updatePreviews(part); // Re-render to show update? Or just toggle opacity
-            // Actually, we just rerender the preview to reflect visibility? 
-            // The preview shows the part regardless of visibility usually, but "toggle visibility" implies action on main skin.
-            // Let's toggle opacity of the PREVIEW to give feedback, or just keep it visible to show what it IS.
-            // Standard UI: The preview shows the part. The click toggles the main skin.
+            updatePreviews(part);
         };
         document.getElementById('ctx-box-2').onclick = () => {
             const part = ctxMenu.dataset.target;
             const mesh = skinViewer.playerObject.skin[part + "Layer"];
             mesh.visible = !mesh.visible;
+            updatePreviews(part);
         };
         document.getElementById('ctx-box-3').onclick = () => {
             const part = ctxMenu.dataset.target;
             const inner = skinViewer.playerObject.skin[part];
             const outer = skinViewer.playerObject.skin[part + "Layer"];
             const bothVisible = inner.visible && outer.visible;
-            
             inner.visible = !bothVisible;
             outer.visible = !bothVisible;
-            
-            // Update icon
-            const icon = document.getElementById('icon-toggle-both');
-            icon.innerText = bothVisible ? 'visibility' : 'visibility_off';
+            document.getElementById('icon-toggle-both').innerText = bothVisible ? 'visibility' : 'visibility_off';
+            updatePreviews(part);
         };
 
-        // Close context menu
         window.addEventListener('click', (e) => {
-            if (!ctxMenu.contains(e.target)) {
-                ctxMenu.style.display = 'none';
-            }
+            if (!ctxMenu.contains(e.target)) ctxMenu.style.display = 'none';
         });
 
-        // --- 7. Other UI Logic (Copy-Pasted from previous & updated) ---
-        
-        // Tooltip Helper
-        function updateTooltip(element) {
-            const tooltip = document.getElementById('cursor-tooltip');
-            tooltip.innerText = element.getAttribute('data-tooltip');
-        }
-
-        const buttons = document.querySelectorAll('.icon-btn');
-        const tooltip = document.getElementById('cursor-tooltip');
-        buttons.forEach(btn => {
-            btn.addEventListener('mousemove', (e) => {
-                tooltip.style.opacity = '1';
-                tooltip.innerText = btn.getAttribute('data-tooltip');
-                tooltip.style.left = (e.clientX + 10) + 'px';
-                tooltip.style.top = (e.clientY + 10) + 'px';
-            });
-            btn.addEventListener('mouseleave', () => tooltip.style.opacity = '0');
-        });
-
+        // --- 8. Helper Functions ---
         // File Upload
         document.getElementById('btn-upload').onclick = () => document.getElementById('skin-input').click();
-        document.getElementById('skin-input').onchange = (e) => {
-            if(e.target.files[0]) loadSkin(e.target.files[0]);
-        };
+        document.getElementById('skin-input').onchange = (e) => { if(e.target.files[0]) loadSkin(e.target.files[0]); };
 
         function loadSkin(file) {
             const reader = new FileReader();
-            reader.onload = (e) => {
-                skinViewer.loadSkin(e.target.result);
-                // Reset model to detect automatically or keep current? 
-                // skinview3d detects model type from image dimensions usually.
-            };
+            reader.onload = (e) => skinViewer.loadSkin(e.target.result);
             reader.readAsDataURL(file);
         }
 
@@ -808,7 +736,6 @@
         };
         
         document.getElementById('btn-visibility').onclick = () => {
-            // Populate
             const list = document.getElementById('vis-toggles');
             list.innerHTML = '';
             ['head', 'body', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(part => {
@@ -832,7 +759,6 @@
             backdrop.style.display = 'none';
         };
 
-        // Resize
         window.addEventListener('resize', () => {
             skinViewer.width = window.innerWidth;
             skinViewer.height = window.innerHeight;
@@ -845,7 +771,26 @@
             }
         });
 
-        // Drag Drop
+        // Toggle Model
+        const modelBtn = document.getElementById('btn-model-toggle');
+        const modelIcon = document.getElementById('model-icon');
+        let currentModel = 'default';
+        modelBtn.onclick = () => {
+            if (currentModel === 'default') {
+                currentModel = 'slim';
+                modelBtn.setAttribute('data-tooltip', 'Slim');
+                modelIcon.innerText = 'girl';
+            } else {
+                currentModel = 'default';
+                modelBtn.setAttribute('data-tooltip', 'Standard');
+                modelIcon.innerText = 'boy';
+            }
+            skinViewer.loadSkin(skinViewer.skinUrl, { model: currentModel });
+             // Update tooltip immediately
+            const tooltip = document.getElementById('cursor-tooltip');
+            if(tooltip.style.opacity === '1') tooltip.innerText = modelBtn.getAttribute('data-tooltip');
+        };
+
         const dropZone = document.getElementById('drop-zone');
         window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.display = 'flex'; setTimeout(()=>dropZone.style.opacity=1, 10); });
         window.addEventListener('dragleave', (e) => { if(e.target===dropZone) { dropZone.style.opacity=0; setTimeout(()=>dropZone.style.display='none',300); }});
